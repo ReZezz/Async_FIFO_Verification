@@ -1,0 +1,83 @@
+`ifndef EMPTY_FIFO_TEST_SV
+`define EMPTY_FIFO_TEST_SV
+import uvm_pkg::*;
+`include "uvm_macros.svh"
+`include "base_test.sv"
+`include "fifo_transaction.sv"
+
+class write_sequence extends uvm_sequence#(fifo_transaction);
+    int pkt_num = 10;
+
+    `uvm_object_utils(write_sequence)
+
+    function new(string name = "write_sequence");
+        super.new(name);
+    endfunction
+
+    virtual task body();
+        fifo_transaction tr;
+        repeat(pkt_num)begin
+            tr = new("tr");
+            start_item(tr);
+            tr.op = fifo_transaction::WRITE;
+            tr.wdata = $urandom();
+            finish_item(tr);
+        end
+    endtask
+endclass
+
+class read_sequence extends uvm_sequence#(fifo_transaction);
+    int pkt_num = 20;
+    `uvm_object_utils(read_sequence)
+
+    function new(string name = "read_sequence");
+        super.new(name);
+    endfunction
+
+    virtual task body();
+        fifo_transaction tr;
+        repeat(pkt_num)begin
+            tr = new("tr");
+            start_item(tr);
+            tr.op = fifo_transaction::READ;
+            finish_item(tr);
+        end
+    endtask
+endclass
+
+class empty_fifo_test extends base_test;
+
+    function new(string name = "empty_fifo_test", uvm_component parent = null);
+        super.new(name, parent);
+    endfunction
+
+    extern virtual task main_phase(uvm_phase phase);
+    `uvm_component_utils(empty_fifo_test)
+endclass
+
+task empty_fifo_test::main_phase(uvm_phase phase);
+    write_sequence w_seq;
+    read_sequence r_seq;
+
+    phase.raise_objection(this);
+    `uvm_info("EMPTY_FIFO_TEST", "Test Started: Reading more data than FIFO depth...", UVM_LOW)
+
+    w_seq = write_sequence::type_id::create("w_seq");
+    r_seq = read_sequence::type_id::create("r_seq");
+    
+    w_seq.start(env.w_agt.w_sqr);
+
+    fork       
+        r_seq.start(env.r_agt.r_sqr);
+
+        begin
+            wait(env.r_agt.r_mon.vif.rempty === 1'b1);
+            `uvm_info("EMPTY_FIFO_TEST", "FIFO is EMPTY now!", UVM_MEDIUM)
+        end
+    join
+    #1000ns;
+    phase.drop_objection(this);
+    `uvm_info("EMPTY_FIFO_TEST", "Test Finished. Check Scoreboard for consistency.", UVM_LOW)
+endtask
+
+`endif
